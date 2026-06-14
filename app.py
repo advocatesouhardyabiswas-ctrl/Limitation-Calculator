@@ -1,228 +1,185 @@
 import streamlit as st
 from datetime import datetime, timedelta
+import sqlite3
+from openai import OpenAI
+from docx import Document
 
-# ----------------------------------
-# PAGE CONFIG
-# ----------------------------------
-st.set_page_config(
-    page_title="Alpine AI",
-    layout="wide",
-    page_icon="⚖️"
+# -------------------------------
+# CONFIG
+# -------------------------------
+st.set_page_config(page_title="Alpine AI", layout="wide")
+
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# -------------------------------
+# DATABASE
+# -------------------------------
+conn = sqlite3.connect("users.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    email TEXT,
+    password TEXT
 )
+""")
+conn.commit()
 
-# ----------------------------------
-# GLOBAL STYLING (LIGHT + TIMES NEW ROMAN)
-# ----------------------------------
-st.markdown("""
-<style>
-html, body, [class*="css"] {
-    font-family: 'Times New Roman', serif;
-    background-color: #f7f9fc;
-}
+# -------------------------------
+# LOGIN SYSTEM
+# -------------------------------
+def login():
+    st.title("🔐 Login")
 
-h1, h2, h3 {
-    color: #1a1a1a;
-}
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-.block-container {
-    padding-top: 2rem;
-}
+    if st.button("Login"):
 
-.stButton>button {
-    width: 100%;
-    border-radius: 10px;
-    height: 3em;
-    background-color: #1e88e5;
-    color: white;
-    font-weight: bold;
-}
+        # ADMIN BYPASS
+        if email == "advocatesouhardyabiswas@gmail.com":
+            st.session_state["logged_in"] = True
+            st.session_state["user"] = email
+            return
 
-.card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
-}
-</style>
-""", unsafe_allow_html=True)
+        c.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
+        result = c.fetchone()
 
-# ----------------------------------
-# HEADER WITH LOGO
-# ----------------------------------
-col1, col2 = st.columns([1,6])
-
-with col1:
-    try:
-        st.image("Alpine monogram.png", width=80)
-    except:
-        pass
-
-with col2:
-    st.title("Alpine AI")
-    st.markdown("### Legal Intelligence Suite")
-
-# ----------------------------------
-# SIDEBAR NAVIGATION
-# ----------------------------------
-menu = st.sidebar.radio("Navigation", [
-    "Dashboard",
-    "Limitation Calculator",
-    "Court Fee Calculator",
-    "Drafting Assistant"
-])
-
-# ----------------------------------
-# DASHBOARD
-# ----------------------------------
-if menu == "Dashboard":
-
-    st.markdown("## Overview")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown('<div class="card">📅<br><b>Limitation Calculator</b><br>Compute deadlines instantly</div>', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown('<div class="card">💰<br><b>Court Fee Calculator</b><br>Estimate fees quickly</div>', unsafe_allow_html=True)
-
-    with col3:
-        st.markdown('<div class="card">📝<br><b>Drafting Assistant</b><br>Generate legal drafts</div>', unsafe_allow_html=True)
-
-# ----------------------------------
-# LIMITATION CALCULATOR
-# ----------------------------------
-elif menu == "Limitation Calculator":
-
-    st.header("📅 Limitation Calculator")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        cause_date = st.date_input("Cause of Action Date")
-
-    with col2:
-        limitation_days = st.number_input("Limitation Period (Days)", min_value=1)
-
-    if st.button("Calculate Limitation"):
-
-        # Section 12 logic → exclude first day
-        start_date = cause_date + timedelta(days=1)
-
-        last_date = start_date + timedelta(days=limitation_days - 1)
-
-        today = datetime.today().date()
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.metric("Last Date to File", last_date.strftime("%d-%m-%Y"))
-
-        with col2:
-            if today <= last_date:
-                st.success("Within Limitation (Sec. 3)")
-            else:
-                delay = (today - last_date).days
-                st.error(f"Delay: {delay} days (Sec. 5 required)")
-
-# ----------------------------------
-# COURT FEE CALCULATOR
-# ----------------------------------
-elif menu == "Court Fee Calculator":
-
-    st.header("💰 Court Fee Calculator")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        suit_type = st.selectbox("Suit Type", [
-            "Money Suit",
-            "Injunction",
-            "Declaration"
-        ])
-
-    with col2:
-        amount = st.number_input("Suit Value (₹)", min_value=0)
-
-    if st.button("Calculate Court Fee"):
-
-        if suit_type == "Money Suit":
-            fee = amount * 0.01  # Ad valorem principle
-        elif suit_type == "Injunction":
-            fee = 500
+        if result:
+            st.session_state["logged_in"] = True
+            st.session_state["user"] = email
         else:
-            fee = 1000
+            st.error("Invalid credentials")
 
-        st.metric("Estimated Court Fee", f"₹ {int(fee)}")
+def signup():
+    st.title("📝 Sign Up")
 
-        st.info("Calculated on basic Court Fees Act principles (ad valorem / fixed fee)")
+    email = st.text_input("New Email")
+    password = st.text_input("New Password", type="password")
 
-# ----------------------------------
-# DRAFTING ASSISTANT
-# ----------------------------------
-elif menu == "Drafting Assistant":
+    if st.button("Create Account"):
+        c.execute("INSERT INTO users VALUES (?,?)", (email, password))
+        conn.commit()
+        st.success("Account created")
 
-    st.header("📝 Drafting Assistant")
+# -------------------------------
+# WORD EXPORT
+# -------------------------------
+def generate_word(text):
+    doc = Document()
+    doc.add_paragraph(text)
+    file_path = "draft.docx"
+    doc.save(file_path)
+    return file_path
 
-    draft_type = st.selectbox("Draft Type", [
-        "Legal Notice",
-        "Writ Petition",
-        "Cheque Bounce (Sec 138 NI Act)"
+# -------------------------------
+# AI DRAFTING
+# -------------------------------
+def generate_ai_draft(facts, relief, draft_type):
+    prompt = f"""
+    Draft a professional {draft_type} in Indian legal format.
+
+    Facts:
+    {facts}
+
+    Relief:
+    {relief}
+
+    Include proper structure, headings, and legal tone.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-5",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    return response.choices[0].message.content
+
+# -------------------------------
+# SESSION CHECK
+# -------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+
+    option = st.selectbox("Select", ["Login", "Sign Up"])
+
+    if option == "Login":
+        login()
+    else:
+        signup()
+
+else:
+
+    # -------------------------------
+    # UI
+    # -------------------------------
+    st.title("⚖️ Alpine AI")
+
+    menu = st.sidebar.radio("Navigation", [
+        "Dashboard",
+        "Limitation",
+        "Court Fees",
+        "AI Drafting"
     ])
 
-    facts = st.text_area("Enter Facts", height=150)
-    relief = st.text_area("Enter Relief", height=100)
+    # -------------------------------
+    # DASHBOARD
+    # -------------------------------
+    if menu == "Dashboard":
+        st.success(f"Welcome {st.session_state['user']}")
 
-    if st.button("Generate Draft"):
+    # -------------------------------
+    # LIMITATION
+    # -------------------------------
+    elif menu == "Limitation":
 
-        if draft_type == "Cheque Bounce (Sec 138 NI Act)":
+        date = st.date_input("Cause Date")
+        days = st.number_input("Days", min_value=1)
 
-            draft = f"""
-LEGAL NOTICE UNDER SECTION 138 OF THE NEGOTIABLE INSTRUMENTS ACT, 1881
+        if st.button("Calculate"):
+            last = date + timedelta(days=days)
+            st.success(f"Last Date: {last}")
 
-Facts:
-{facts}
+    # -------------------------------
+    # COURT FEES
+    # -------------------------------
+    elif menu == "Court Fees":
 
-The cheque issued by you has been dishonoured due to insufficiency of funds.
+        value = st.number_input("Suit Value")
 
-You are hereby called upon to make the payment within 15 days from receipt of this notice.
+        if st.button("Calculate Fee"):
+            fee = value * 0.01
+            st.success(f"₹ {fee}")
 
-Failing which, appropriate legal proceedings shall be initiated.
+    # -------------------------------
+    # AI DRAFTING
+    # -------------------------------
+    elif menu == "AI Drafting":
 
-Relief:
-{relief}
-"""
+        draft_type = st.selectbox("Draft Type", [
+            "Legal Notice",
+            "Writ Petition",
+            "Consumer Complaint"
+        ])
 
-        elif draft_type == "Writ Petition":
+        facts = st.text_area("Facts")
+        relief = st.text_area("Relief")
 
-            draft = f"""
-IN THE HIGH COURT
+        if st.button("Generate AI Draft"):
 
-Facts:
-{facts}
+            with st.spinner("Generating..."):
+                draft = generate_ai_draft(facts, relief, draft_type)
 
-GROUNDS:
-- Violation of fundamental rights
-- Arbitrary action
+            st.text_area("Draft", draft, height=300)
 
-PRAYER:
-{relief}
-"""
+            # DOWNLOAD BUTTON
+            file_path = generate_word(draft)
 
-        else:
-
-            draft = f"""
-LEGAL NOTICE
-
-Facts:
-{facts}
-
-You are hereby called upon to comply within 15 days.
-
-Failing which legal action shall be initiated.
-
-Relief:
-{relief}
-"""
-
-        st.text_area("Generated Draft", draft, height=300)
+            with open(file_path, "rb") as file:
+                st.download_button(
+                    label="📄 Download as Word",
+                    data=file,
+                    file_name="draft.docx"
+                )
