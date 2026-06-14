@@ -1,37 +1,27 @@
 import streamlit as st
+import os
 from datetime import datetime, timedelta
 
 # -------------------------------
 # CONFIGURATION
 # -------------------------------
-st.set_page_config(
-    page_title="Alpine AI",
-    layout="wide",
-    page_icon="⚖️"
-)
+st.set_page_config(page_title="Alpine AI", layout="wide", page_icon="⚖️")
 
 # -------------------------------
-# STYLING (Blue, White, Professional)
+# STYLING (Blue & White Professional)
 # -------------------------------
 st.markdown("""
 <style>
-    /* Font and Background */
     body { font-family: 'Times New Roman', serif; background-color: #f8f9fa; }
-    
-    /* Headers */
     h1, h2, h3 { color: #004a99; }
-    
-    /* Cards */
     .card {
         background-color: white;
-        padding: 25px;
+        padding: 20px;
         border-radius: 12px;
         border-left: 5px solid #004a99;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    
-    /* Buttons */
     .stButton>button {
         width: 100%;
         border-radius: 8px;
@@ -41,7 +31,6 @@ st.markdown("""
         border: none;
         padding: 10px;
     }
-    .stButton>button:hover { background-color: #003366; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -49,12 +38,19 @@ st.markdown("""
 # HEADER
 # -------------------------------
 col1, col2 = st.columns([1, 10])
+
+# Using 'monogram.png' - change this if your file name is different
+img_path = "monogram.png"
+
 with col1:
-    # Ensure "Alpine monogram.png" is in your repo folder
-    st.image("Alpine monogram.png", width=70)
+    if os.path.exists(img_path):
+        st.image(img_path, width=70)
+    else:
+        st.write("❄️") # Fallback icon if image missing
+
 with col2:
     st.title("Alpine AI")
-    st.subheader("Legal Intelligence Suite")
+    st.markdown("### Legal Intelligence Suite")
 
 # -------------------------------
 # NAVIGATION
@@ -62,47 +58,37 @@ with col2:
 menu = st.sidebar.radio("Navigation", ["Dashboard", "Limitation", "Court Fees", "Drafting"])
 
 # -------------------------------
-# PAGES
+# LOGIC
 # -------------------------------
 if menu == "Dashboard":
     st.markdown("### Welcome, Advocate.")
-    col1, col2, col3 = st.columns(3)
-    with col1: st.markdown('<div class="card">📅 **Limitation Calculator**</div>', unsafe_allow_html=True)
-    with col2: st.markdown('<div class="card">💰 **Court Fee Calculator**</div>', unsafe_allow_html=True)
-    with col3: st.markdown('<div class="card">📝 **Drafting Assistant**</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown('<div class="card">📅 Limitation Calculator</div>', unsafe_allow_html=True)
+    c2.markdown('<div class="card">💰 Court Fee Calculator</div>', unsafe_allow_html=True)
+    c3.markdown('<div class="card">📝 Drafting Assistant</div>', unsafe_allow_html=True)
 
 elif menu == "Limitation":
     st.header("📅 Limitation Calculator")
     c1, c2 = st.columns(2)
-    with c1: cause_date = st.date_input("Cause of Action Date")
-    with c2: lim_days = st.number_input("Limitation Period (Days)", min_value=1, value=30)
+    cause_date = c1.date_input("Cause of Action Date")
+    lim_days = c2.number_input("Days", min_value=1, value=30)
     
     if st.button("Calculate"):
-        start_date = cause_date + timedelta(days=1)
-        last_date = start_date + timedelta(days=lim_days - 1)
-        today = datetime.today().date()
-        
-        st.metric("Last Date to File", last_date.strftime("%d-%m-%Y"))
-        if today <= last_date:
-            st.success("Within Limitation (Sec. 3)")
+        last_date = cause_date + timedelta(days=lim_days)
+        st.metric("Last Date", last_date.strftime("%d-%m-%Y"))
+        if datetime.today().date() <= last_date:
+            st.success("Within Limitation")
         else:
-            st.error(f"Delay of {(today - last_date).days} days — Sec. 5 condonation required.")
+            st.error("Limitation Expired")
 
 elif menu == "Court Fees":
     st.header("💰 Court Fee Calculator")
-    s_type = st.selectbox("Suit Type", ["Money Suit", "Injunction", "Declaration"])
     val = st.number_input("Suit Value (₹)", min_value=0)
-    
-    if st.button("Calculate Fee"):
-        fee = (val * 0.01) if s_type == "Money Suit" else (500 if s_type == "Injunction" else 1000)
-        st.metric("Estimated Court Fee", f"₹ {int(fee):,}")
+    if st.button("Calculate"):
+        st.metric("Estimated Fee", f"₹ {int(val * 0.01):,}")
 
 elif menu == "Drafting":
     st.header("📝 Drafting Assistant")
-    d_type = st.selectbox("Draft Type", ["Legal Notice", "Writ Petition", "Cheque Bounce (Sec 138)"])
-    facts = st.text_area("Facts", height=150)
-    relief = st.text_area("Relief", height=100)
-    
-    if st.button("Generate Draft"):
-        draft = f"--- {d_type.upper()} ---\n\nFacts:\n{facts}\n\nRelief:\n{relief}\n\nFiled before appropriate authority."
-        st.text_area("Draft Output", draft, height=300)
+    facts = st.text_area("Facts")
+    if st.button("Generate"):
+        st.text_area("Result", f"LEGAL DRAFT\n\n{facts}", height=200)
