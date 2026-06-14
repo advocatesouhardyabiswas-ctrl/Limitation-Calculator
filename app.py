@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import os
 from datetime import datetime, timedelta
 from openai import OpenAI
@@ -8,100 +7,112 @@ from docx import Document
 # -------------------------------
 # CONFIG
 # -------------------------------
-st.set_page_config(page_title="Alpine AI", layout="wide", page_icon="⚖️")
+st.set_page_config(page_title="Alpine AI", layout="wide", page_icon="al")
 
-# OpenAI Client Setup (Ensure your secrets are set in Streamlit)
+# Ensure API key is configured in your Streamlit secrets
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY"))
 
 # -------------------------------
-# DATABASE
+# STYLING
 # -------------------------------
-conn = sqlite3.connect("users.db", check_same_thread=False)
-c = conn.cursor()
-c.execute("CREATE TABLE IF NOT EXISTS users (email TEXT, password TEXT)")
-conn.commit()
+st.markdown("""
+<style>
+    body { font-family: 'Times New Roman', serif; background-color: #f8f9fa; }
+    h1, h2, h3 { color: #004a99; }
+    .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 5px solid #004a99;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        background-color: #004a99;
+        color: white;
+        font-weight: bold;
+        border: none;
+        padding: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # -------------------------------
-# AI DRAFTING ENGINE
+# HEADER
 # -------------------------------
-def generate_ai_draft(facts, relief, draft_type):
-    try:
-        prompt = f"Draft a professional {draft_type} in Indian legal format. Facts: {facts}. Relief: {relief}."
-        response = client.chat.completions.create(
-            model="gpt-4o", # Using a standard available model
-            messages=[{"role": "system", "content": "You are a professional Indian legal assistant."},
-                      {"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Error generating draft: {e}"
+col1, col2 = st.columns([1, 10])
+if os.path.exists("monogram.png"):
+    col1.image("monogram.png", width=70)
+col2.title("Alpine AI")
+col2.markdown("### Legal Intelligence Suite")
 
 # -------------------------------
-# AUTHENTICATION
+# NAVIGATION
 # -------------------------------
-if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    option = st.sidebar.radio("Navigation", ["Login", "Sign Up"])
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-
-    if option == "Login":
-        if st.button("Login"):
-            if email == "advocatesouhardyabiswas@gmail.com":
-                st.session_state.update({"logged_in": True, "user": email})
-                st.rerun()
-            c.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
-            if c.fetchone():
-                st.session_state.update({"logged_in": True, "user": email})
-                st.rerun()
-            else: st.error("Invalid credentials")
-    else:
-        if st.button("Create Account"):
-            c.execute("INSERT INTO users VALUES (?,?)", (email, password))
-            conn.commit()
-            st.success("Account created! Please log in.")
-    st.stop()
-
-# -------------------------------
-# MAIN APP (LOGGED IN)
-# -------------------------------
-st.title("⚖️ Alpine AI")
 menu = st.sidebar.radio("Navigation", ["Dashboard", "Limitation", "Court Fees", "AI Drafting"])
 
+# -------------------------------
+# DASHBOARD
+# -------------------------------
 if menu == "Dashboard":
-    st.success(f"Welcome, {st.session_state['user']}")
-    st.markdown("---")
-    st.write("Use the sidebar to navigate the legal suite.")
+    st.markdown("### Welcome, Advocate.")
+    c1, c2, c3 = st.columns(3)
+    c1.markdown('<div class="card">📅 **Limitation Calculator**</div>', unsafe_allow_html=True)
+    c2.markdown('<div class="card">💰 **Court Fee Calculator**</div>', unsafe_allow_html=True)
+    c3.markdown('<div class="card">📝 **AI Drafting Assistant**</div>', unsafe_allow_html=True)
 
+# -------------------------------
+# LIMITATION
+# -------------------------------
 elif menu == "Limitation":
     st.header("📅 Limitation Calculator")
-    date = st.date_input("Cause of Action Date")
-    days = st.number_input("Limitation Period (Days)", min_value=1)
+    d1, d2 = st.columns(2)
+    cause_date = d1.date_input("Cause of Action Date")
+    days = d2.number_input("Limitation Period (Days)", min_value=1, value=30)
+    
     if st.button("Calculate"):
-        last = date + timedelta(days=days)
-        st.metric("Last Date to File", last.strftime("%d-%m-%Y"))
+        last_date = cause_date + timedelta(days=days)
+        st.metric("Last Date to File", last_date.strftime("%d-%m-%Y"))
+        if datetime.today().date() <= last_date:
+            st.success("Within Limitation (Sec. 3)")
+        else:
+            st.error(f"Expired by {(datetime.today().date() - last_date).days} days")
 
+# -------------------------------
+# COURT FEES
+# -------------------------------
 elif menu == "Court Fees":
     st.header("💰 Court Fee Calculator")
     val = st.number_input("Suit Value (₹)", min_value=0)
     if st.button("Calculate Fee"):
         st.success(f"Estimated Fee: ₹ {int(val * 0.01):,}")
 
+# -------------------------------
+# AI DRAFTING
+# -------------------------------
 elif menu == "AI Drafting":
     st.header("📝 AI Drafting Assistant")
     d_type = st.selectbox("Draft Type", ["Legal Notice", "Writ Petition", "Consumer Complaint"])
-    facts = st.text_area("Facts")
-    relief = st.text_area("Relief")
+    facts = st.text_area("Facts", height=150)
+    relief = st.text_area("Relief", height=100)
 
     if st.button("Generate AI Draft"):
-        with st.spinner("Alpine AI is drafting..."):
-            draft = generate_ai_draft(facts, relief, d_type)
-            st.text_area("Draft Output", draft, height=300)
-            
-            # Word Export
-            doc = Document()
-            doc.add_paragraph(draft)
-            doc.save("draft.docx")
-            with open("draft.docx", "rb") as f:
-                st.download_button("📄 Download as Word", f, "draft.docx")
+        if not client.api_key:
+            st.error("API Key not set.")
+        else:
+            with st.spinner("Alpine AI is working..."):
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": f"Draft a {d_type}. Facts: {facts}. Relief: {relief}."}]
+                )
+                draft = response.choices[0].message.content
+                st.text_area("Draft Output", draft, height=300)
+                
+                # Export
+                doc = Document()
+                doc.add_paragraph(draft)
+                doc.save("draft.docx")
+                with open("draft.docx", "rb") as f:
+                    st.download_button("📄 Download as Word", f, "draft.docx")
