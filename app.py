@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 from datetime import datetime, timedelta
 from openai import OpenAI
 from docx import Document
@@ -7,46 +6,17 @@ from docx import Document
 # -------------------------------
 # CONFIG
 # -------------------------------
-st.set_page_config(page_title="Alpine AI", layout="wide", page_icon="al")
+st.set_page_config(page_title="Alpine AI", layout="centered", page_icon="⚖️")
 
-# Ensure API key is configured in your Streamlit secrets
+# OpenAI Client Setup (Ensure key is in your Streamlit secrets)
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY"))
 
 # -------------------------------
-# STYLING
+# APP HEADER
 # -------------------------------
-st.markdown("""
-<style>
-    body { font-family: 'Times New Roman', serif; background-color: #f8f9fa; }
-    h1, h2, h3 { color: #004a99; }
-    .card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #004a99;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        background-color: #004a99;
-        color: white;
-        font-weight: bold;
-        border: none;
-        padding: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------------------
-# HEADER
-# -------------------------------
-col1, col2 = st.columns([1, 10])
-if os.path.exists("monogram.png"):
-    col1.image("monogram.png", width=70)
-col2.title("Alpine AI")
-col2.markdown("### Legal Intelligence Suite")
+st.title("Alpine AI")
+st.caption("Legal Intelligence Suite")
+st.markdown("---")
 
 # -------------------------------
 # NAVIGATION
@@ -57,28 +27,27 @@ menu = st.sidebar.radio("Navigation", ["Dashboard", "Limitation", "Court Fees", 
 # DASHBOARD
 # -------------------------------
 if menu == "Dashboard":
-    st.markdown("### Welcome, Advocate.")
-    c1, c2, c3 = st.columns(3)
-    c1.markdown('<div class="card">📅 **Limitation Calculator**</div>', unsafe_allow_html=True)
-    c2.markdown('<div class="card">💰 **Court Fee Calculator**</div>', unsafe_allow_html=True)
-    c3.markdown('<div class="card">📝 **AI Drafting Assistant**</div>', unsafe_allow_html=True)
+    st.subheader("Welcome")
+    st.write("Select a tool from the sidebar to begin.")
 
 # -------------------------------
-# LIMITATION
+# LIMITATION CALCULATOR
 # -------------------------------
 elif menu == "Limitation":
     st.header("📅 Limitation Calculator")
-    d1, d2 = st.columns(2)
-    cause_date = d1.date_input("Cause of Action Date")
-    days = d2.number_input("Limitation Period (Days)", min_value=1, value=30)
     
-    if st.button("Calculate"):
-        last_date = cause_date + timedelta(days=days)
-        st.metric("Last Date to File", last_date.strftime("%d-%m-%Y"))
+    col1, col2 = st.columns(2)
+    cause_date = col1.date_input("Cause of Action Date")
+    lim_days = col2.number_input("Limitation Period (Days)", min_value=1, value=30)
+    
+    if st.button("Calculate", type="primary"):
+        last_date = cause_date + timedelta(days=lim_days)
+        st.write(f"### Last Date to File: **{last_date.strftime('%d-%m-%Y')}**")
+        
         if datetime.today().date() <= last_date:
-            st.success("Within Limitation (Sec. 3)")
+            st.success("Within Limitation")
         else:
-            st.error(f"Expired by {(datetime.today().date() - last_date).days} days")
+            st.error("Limitation Expired")
 
 # -------------------------------
 # COURT FEES
@@ -86,8 +55,8 @@ elif menu == "Limitation":
 elif menu == "Court Fees":
     st.header("💰 Court Fee Calculator")
     val = st.number_input("Suit Value (₹)", min_value=0)
-    if st.button("Calculate Fee"):
-        st.success(f"Estimated Fee: ₹ {int(val * 0.01):,}")
+    if st.button("Calculate", type="primary"):
+        st.write(f"### Estimated Fee: **₹ {int(val * 0.01):,}**")
 
 # -------------------------------
 # AI DRAFTING
@@ -95,24 +64,24 @@ elif menu == "Court Fees":
 elif menu == "AI Drafting":
     st.header("📝 AI Drafting Assistant")
     d_type = st.selectbox("Draft Type", ["Legal Notice", "Writ Petition", "Consumer Complaint"])
-    facts = st.text_area("Facts", height=150)
-    relief = st.text_area("Relief", height=100)
+    facts = st.text_area("Facts", height=120)
+    relief = st.text_area("Relief", height=80)
 
-    if st.button("Generate AI Draft"):
-        if not client.api_key:
-            st.error("API Key not set.")
-        else:
-            with st.spinner("Alpine AI is working..."):
+    if st.button("Generate Draft", type="primary"):
+        with st.spinner("Generating..."):
+            try:
                 response = client.chat.completions.create(
                     model="gpt-4o",
-                    messages=[{"role": "user", "content": f"Draft a {d_type}. Facts: {facts}. Relief: {relief}."}]
+                    messages=[{"role": "user", "content": f"Draft a {d_type} for: {facts}. Relief: {relief}."}]
                 )
                 draft = response.choices[0].message.content
-                st.text_area("Draft Output", draft, height=300)
+                st.text_area("Draft Output", draft, height=250)
                 
-                # Export
+                # Word Export
                 doc = Document()
                 doc.add_paragraph(draft)
                 doc.save("draft.docx")
                 with open("draft.docx", "rb") as f:
                     st.download_button("📄 Download as Word", f, "draft.docx")
+            except Exception as e:
+                st.error("Could not generate draft. Please check your API key.")
